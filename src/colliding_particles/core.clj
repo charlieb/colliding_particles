@@ -15,6 +15,8 @@
          :pos [((:pos e) 0) ((:pos e) 1)]
          :type (:type e)))
 (defn v- [[x1 y1] [x2 y2]] [(- x1 x2) (- y1 y2)])
+(defn v+ [[x1 y1] [x2 y2]] [(+ x1 x2) (+ y1 y2)])
+(defn v* [[x y] scl] [(+ x scl) (+ y scl)])
 (defn mag-sq [[x y]] (+ (* x x) (* y y)))
 (defn mag [v] (Math/sqrt (mag-sq v)))
 (defn norm [[x y]] (let [m (mag [x y])] [(/ x m) (/ y m)]))
@@ -37,7 +39,8 @@
    :dead-particles '()
    }))
 
-(defn update-state [state]
+
+(defn update-dead-alive [state]
   (loop [p (first (:particles state))
          ps (rest (:particles state))
          dead #{}
@@ -45,7 +48,7 @@
     (if (empty? ps)
       (assoc state
              :particles (concat (conj alive p)
-                                (take (- (:nparticles state) (count alive) -1) ; correct for remaining p
+                                (take (count dead)
                                       (repeatedly #(emit (rand-nth (:emitters state))))))
              :dead-particles (concat (:dead-particles state) dead))
     (let [hits (set 
@@ -59,12 +62,42 @@
              (union dead new-dead)
              (if (empty? new-dead) (conj alive p) alive))))))
 
+(defn update-accelerations [state]
+  (println 'accelerations state)
+  (assoc state
+         :particles
+         (map (fn [p]
+                (let [dv (v- (:pos (:emmitter p)) (:pos p))
+                      dvm (min 5 (mag dv))
+                      dvn (norm dv)]
+                  (assoc p
+                         :vel (v+ (:vel p)
+                                  (v* dvm dvn)))))
+              (:particles state))))
+
+(defn update-positions [state]
+  (println 'positions state)
+  (assoc state
+         :particles
+         (map #(assoc %
+                      :pos (v+ (:pos %)
+                               (:vel %)))
+              (:particles state))))
+
+
+(defn update-state [state]
+  (->> state
+       update-dead-alive
+       update-accelerations
+       update-positions))
+
 (defn draw-state [state]
   ; Clear the sketch by filling it with light-grey color.
   (q/background 240)
   ; Set circle color.
   ;(q/fill (:color state) 255 255)
   ; Calculate x and y coordinates of the circle.
+  (println state)
   (println (map :pos (:particles state)))
   )
 
