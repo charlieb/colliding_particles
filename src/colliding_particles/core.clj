@@ -2,6 +2,16 @@
   (:use clojure.set)
   (:require [quil.core :as q]
             [quil.middleware :as m]))
+(defn v- [[x1 y1] [x2 y2]] [(- x1 x2) (- y1 y2)])
+(defn v+ [[x1 y1] [x2 y2]] [(+ x1 x2) (+ y1 y2)])
+(defn v* [[x y] scl] [(* x scl) (* y scl)])
+(defn mag-sq [[x y]] (+ (* x x) (* y y)))
+(defn mag [v] (Math/sqrt (mag-sq v)))
+(defn norm [[x y]] (let [m (mag [x y])] [(/ x m) (/ y m)]))
+(defn rnd-v [] 
+  (let [a (q/random 6.283)]
+    [(q/cos a) (q/sin a)]))
+
 
 (defn mk-part [] {:pos [0 0] :vel [0 0] :emitter nil :history '()})
 (defn mk-emitter [] {:pos [0 0] :str 1. :col [1. 1. 1. 1.]})
@@ -12,16 +22,8 @@
          :col [(q/random 1.) 0.8 0.8 0.3]))
 (defn emit [e]
   (assoc (mk-part)
-         :pos [(+ (q/random 1.0) ((:pos e) 0))
-               (+ (q/random 1.0) ((:pos e) 1))]
+         :pos (v+ (:pos e) (rnd-v))
          :emitter e))
-
-(defn v- [[x1 y1] [x2 y2]] [(- x1 x2) (- y1 y2)])
-(defn v+ [[x1 y1] [x2 y2]] [(+ x1 x2) (+ y1 y2)])
-(defn v* [[x y] scl] [(* x scl) (* y scl)])
-(defn mag-sq [[x y]] (+ (* x x) (* y y)))
-(defn mag [v] (Math/sqrt (mag-sq v)))
-(defn norm [[x y]] (let [m (mag [x y])] [(/ x m) (/ y m)]))
 
 
 (defn setup []
@@ -31,11 +33,10 @@
   (q/color-mode :hsb 1.0)
   ; setup function returns initial state. It contains
   ; circle color and position.
-  (let [emitters (take 5 (repeatedly #(rnd-emitter 500 500)))
-        particles (take 100 (repeatedly #(emit (rand-nth emitters))))]
+  (let [emitters (take 50 (repeatedly #(rnd-emitter 500 500)))
+        particles (take 500 (repeatedly #(emit (rand-nth emitters))))]
 
-  {:nparticles 100
-   :particles particles
+  {:particles particles
    :emitters emitters
    :dead-particles '()
    }))
@@ -53,7 +54,7 @@
                                       (repeatedly #(emit (rand-nth (:emitters state))))))
              :dead-particles (concat (:dead-particles state) dead))
     (let [hits (set 
-                 (filter (fn [p2] (and (not (= (:type p) (:type p2)))
+                 (filter (fn [p2] (and (not (= (:emitter p) (:emitter p2)))
                                        (< (mag (v- (:pos p) (:pos p2))) 5))) 
                          ps))
           new-dead (if (empty? hits) #{} (conj hits p))
@@ -64,19 +65,15 @@
              (if (empty? new-dead) (conj alive p) alive))))))
 
 (defn update-accelerations [state]
-  ;(println 'accelerations state)
   (assoc state
          :particles
          (map (fn [p]
-                (let [dv (v- (:pos (:emitter p)) (:pos p))
-                      dvmag (min 5 (mag dv))]
-                  (println 'accelerations2 dv dvmag (when (zero? dvmag) p))
-                  (let [
-                      dvnorm (norm dv)
-                      ]
+                (let [dv (v- (:pos p) (:pos (:emitter p)))
+                      dvmag (min 5 (mag dv))
+                      dvnorm (norm dv)]
                   (assoc p
                          :vel (v+ (:vel p)
-                                  (v* dvnorm dvmag))))))
+                                  (v* dvnorm dvmag)))))
               (:particles state))))
 
 (defn update-positions [state]
@@ -102,6 +99,11 @@
   ;(q/fill (:color state) 255 255)
   ; Calculate x and y coordinates of the circle.
   ;(println 'draw (map :pos (:particles state)))
+  (println (count (:dead-particles state)))
+  (doseq [p (:particles state)]
+    (q/stroke 1.0 1.0 0.8 0.2)
+    (q/ellipse ((:pos p) 0) ((:pos p) 1) 5 5)
+    )
   )
 
 (defn -main [& args]
