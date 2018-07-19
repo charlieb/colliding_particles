@@ -19,7 +19,7 @@
 (defn rnd-emitter [x y] 
   (assoc (mk-emitter)
          :pos [(q/random x) (q/random y)]
-         :col [(q/random 1.) 0.8 0.8 0.3]))
+         :col [(q/random 1.) 1.0 0.8 0.2]))
 (defn emit [e]
   (assoc (mk-part)
          :pos (v+ (:pos e) (rnd-v))
@@ -33,12 +33,13 @@
   (q/color-mode :hsb 1.0)
   ; setup function returns initial state. It contains
   ; circle color and position.
-  (let [emitters (take 50 (repeatedly #(rnd-emitter 500 500)))
-        particles (take 500 (repeatedly #(emit (rand-nth emitters))))]
+  (let [emitters (take 20 (repeatedly #(rnd-emitter 500 500)))
+        particles (take 1000 (repeatedly #(emit (rand-nth emitters))))]
 
   {:particles particles
    :emitters emitters
    :dead-particles '()
+   :iterations 0
    }))
 
 
@@ -53,23 +54,30 @@
                                 (take (count dead)
                                       (repeatedly #(emit (rand-nth (:emitters state))))))
              :dead-particles (concat (:dead-particles state) dead))
-    (let [hits (set 
-                 (filter (fn [p2] (and (not (= (:emitter p) (:emitter p2)))
-                                       (< (mag (v- (:pos p) (:pos p2))) 5))) 
-                         ps))
-          new-dead (if (empty? hits) #{} (conj hits p))
-          left-alive (filter #(not (contains? hits %)) ps)]
-      (recur (first left-alive)
-             (rest left-alive)
-             (union dead new-dead)
-             (if (empty? new-dead) (conj alive p) alive))))))
+      (if (not (and (< 0 ((:pos p) 0) 500)
+                    (< 0 ((:pos p) 1) 500)))
+        (recur (first ps)
+               (rest ps)
+               (conj dead p)
+               alive)
+        (let [hits (set 
+                     (filter (fn [p2]          
+                               (and (not (= (:emitter p) (:emitter p2)))
+                                    (< (mag (v- (:pos p) (:pos p2))) 10)))
+                             ps))
+              new-dead (if (empty? hits) #{} (conj hits p))
+              left-alive (filter #(not (contains? hits %)) ps)]
+          (recur (first left-alive)
+                 (rest left-alive)
+                 (union dead new-dead)
+                 (if (empty? new-dead) (conj alive p) alive)))))))
 
 (defn update-accelerations [state]
   (assoc state
          :particles
          (map (fn [p]
                 (let [dv (v- (:pos p) (:pos (:emitter p)))
-                      dvmag (min 5 (mag dv))
+                      dvmag (min 1 (mag dv))
                       dvnorm (norm dv)]
                   (assoc p
                          :vel (v+ (:vel p)
@@ -77,34 +85,47 @@
               (:particles state))))
 
 (defn update-positions [state]
-  ;(println 'positions state)
   (assoc state
          :particles
          (map #(assoc %
                       :pos (v+ (:pos %)
-                               (:vel %)))
+                               (:vel %))
+                      :history (conj (:history %) (:pos %)))
               (:particles state))))
 
-
+(defn inc-iterations [state] (update state :iterations inc))
 (defn update-state [state]
   (->> state
        update-dead-alive
        update-accelerations
-       update-positions))
+       update-positions
+       inc-iterations
+       ))
 
 (defn draw-state [state]
-  ; Clear the sketch by filling it with light-grey color.
-  (q/background 240)
-  ; Set circle color.
-  ;(q/fill (:color state) 255 255)
-  ; Calculate x and y coordinates of the circle.
-  ;(println 'draw (map :pos (:particles state)))
-  (println (count (:dead-particles state)))
-  (doseq [p (:particles state)]
-    (q/stroke 1.0 1.0 0.8 0.2)
-    (q/ellipse ((:pos p) 0) ((:pos p) 1) 5 5)
-    )
-  )
+  (when (zero? (mod (:iterations state) 20))
+    ; Clear the sketch by filling it with grey color.
+    (q/background 0.2)
+    ; Set circle color.
+    ;(q/fill (:color state) 255 255)
+    ; Calculate x and y coordinates of the circle.
+    ;(println 'draw (map :pos (:particles state)))
+    ;(println (count (:particles state)) (count (:dead-particles state)))
+    (when false
+      (doseq [p (:particles state)]
+        (q/stroke 1.0 1.0 0.8 0.2)
+        (q/ellipse ((:pos p) 0) ((:pos p) 1) 5 5)
+        ))
+    (doseq [part (:dead-particles state)]
+      (q/no-fill)
+      (apply q/stroke (:col (:emitter part)))
+      (q/begin-shape)
+      (doseq [[x y] (:history part)]
+        (q/vertex x y))
+      (q/end-shape))
+
+
+    ))
 
 (defn -main [& args]
   (q/defsketch colliding_particles
