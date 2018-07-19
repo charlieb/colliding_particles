@@ -13,13 +13,13 @@
     [(q/cos a) (q/sin a)]))
 
 
-(defn mk-part [] {:pos [0 0] :vel [0 0] :emitter nil :history '()})
+(defn mk-part [] {:pos [0 0] :vel [0 0] :emitter nil :history '() :cw (> 0.5 (q/random 1.0))})
 (defn mk-emitter [] {:pos [0 0] :str 1. :col [1. 1. 1. 1.]})
 
 (defn rnd-emitter [x y] 
   (assoc (mk-emitter)
          :pos [(q/random x) (q/random y)]
-         :col [(q/random 1.) 1.0 0.8 0.2]))
+         :col [(+ 0.5 (q/random 0.25)) 1.0 0.5 0.2]))
 (defn emit [e]
   (assoc (mk-part)
          :pos (v+ (:pos e) (rnd-v))
@@ -33,7 +33,7 @@
   (q/color-mode :hsb 1.0)
   ; setup function returns initial state. It contains
   ; circle color and position.
-  (let [emitters (take 20 (repeatedly #(rnd-emitter 500 500)))
+  (let [emitters (take 50 (repeatedly #(rnd-emitter 500 500)))
         particles (take 1000 (repeatedly #(emit (rand-nth emitters))))]
 
   {:particles particles
@@ -72,17 +72,29 @@
                  (union dead new-dead)
                  (if (empty? new-dead) (conj alive p) alive)))))))
 
+(defn repel [p]
+  (let [dv (v- (:pos p) (:pos (:emitter p)))
+        dvmag (min 1 (mag dv))
+        dvnorm (norm dv)]
+    (assoc p
+           :vel (norm (v+ (:vel p)
+                          (v* dvnorm dvmag))))))
+(defn tangent [p]
+  (let [dv (v- (:pos p) (:pos (:emitter p)))
+        dvmag (min 1 (mag dv))
+        dvnorm (norm dv)]
+    (assoc p
+           :vel (v+ (:vel p)
+                    (if (:cw p)
+                      [(- (dvnorm 1)) (dvnorm 0)]
+                      [(dvnorm 1) (- (dvnorm 0))])))))
+
 (defn update-accelerations [state]
   (assoc state
-         :particles
-         (map (fn [p]
-                (let [dv (v- (:pos p) (:pos (:emitter p)))
-                      dvmag (min 1 (mag dv))
-                      dvnorm (norm dv)]
-                  (assoc p
-                         :vel (v+ (:vel p)
-                                  (v* dvnorm dvmag)))))
-              (:particles state))))
+         :particles (map 
+                      tangent
+                      ;repel
+                      (:particles state))))
 
 (defn update-positions [state]
   (assoc state
@@ -105,7 +117,7 @@
 (defn draw-state [state]
   (when (zero? (mod (:iterations state) 20))
     ; Clear the sketch by filling it with grey color.
-    (q/background 0.2)
+    (q/background 0.0)
     ; Set circle color.
     ;(q/fill (:color state) 255 255)
     ; Calculate x and y coordinates of the circle.
@@ -124,6 +136,8 @@
         (q/vertex x y))
       (q/end-shape))
 
+    (when (and true (zero? (mod (:iterations state) 20)))
+      (q/save "hairy.png"))
 
     ))
 
