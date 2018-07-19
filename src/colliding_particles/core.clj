@@ -3,8 +3,8 @@
   (:require [quil.core :as q]
             [quil.middleware :as m]))
 
-(defn mk-part [] {:pos [0 0] :vel [0 0] :type 0 :history '()})
-(defn mk-emitter [] {:pos [0 0] :str 1. :col [1. 1. 1. 1.] :type 0})
+(defn mk-part [] {:pos [0 0] :vel [0 0] :emitter nil :history '()})
+(defn mk-emitter [] {:pos [0 0] :str 1. :col [1. 1. 1. 1.]})
 
 (defn rnd-emitter [x y] 
   (assoc (mk-emitter)
@@ -12,11 +12,13 @@
          :col [(q/random 1.) 0.8 0.8 0.3]))
 (defn emit [e]
   (assoc (mk-part)
-         :pos [((:pos e) 0) ((:pos e) 1)]
-         :type (:type e)))
+         :pos [(+ (q/random 1.0) ((:pos e) 0))
+               (+ (q/random 1.0) ((:pos e) 1))]
+         :emitter e))
+
 (defn v- [[x1 y1] [x2 y2]] [(- x1 x2) (- y1 y2)])
 (defn v+ [[x1 y1] [x2 y2]] [(+ x1 x2) (+ y1 y2)])
-(defn v* [[x y] scl] [(+ x scl) (+ y scl)])
+(defn v* [[x y] scl] [(* x scl) (* y scl)])
 (defn mag-sq [[x y]] (+ (* x x) (* y y)))
 (defn mag [v] (Math/sqrt (mag-sq v)))
 (defn norm [[x y]] (let [m (mag [x y])] [(/ x m) (/ y m)]))
@@ -29,8 +31,7 @@
   (q/color-mode :hsb 1.0)
   ; setup function returns initial state. It contains
   ; circle color and position.
-  (let [emitters (map-indexed (fn [i e] (assoc e :type i))
-                              (take 5 (repeatedly #(rnd-emitter 500 500))))
+  (let [emitters (take 5 (repeatedly #(rnd-emitter 500 500)))
         particles (take 100 (repeatedly #(emit (rand-nth emitters))))]
 
   {:nparticles 100
@@ -63,20 +64,23 @@
              (if (empty? new-dead) (conj alive p) alive))))))
 
 (defn update-accelerations [state]
-  (println 'accelerations state)
+  ;(println 'accelerations state)
   (assoc state
          :particles
          (map (fn [p]
-                (let [dv (v- (:pos (:emmitter p)) (:pos p))
-                      dvm (min 5 (mag dv))
-                      dvn (norm dv)]
+                (let [dv (v- (:pos (:emitter p)) (:pos p))
+                      dvmag (min 5 (mag dv))]
+                  (println 'accelerations2 dv dvmag (when (zero? dvmag) p))
+                  (let [
+                      dvnorm (norm dv)
+                      ]
                   (assoc p
                          :vel (v+ (:vel p)
-                                  (v* dvm dvn)))))
+                                  (v* dvnorm dvmag))))))
               (:particles state))))
 
 (defn update-positions [state]
-  (println 'positions state)
+  ;(println 'positions state)
   (assoc state
          :particles
          (map #(assoc %
@@ -97,8 +101,7 @@
   ; Set circle color.
   ;(q/fill (:color state) 255 255)
   ; Calculate x and y coordinates of the circle.
-  (println state)
-  (println (map :pos (:particles state)))
+  ;(println 'draw (map :pos (:particles state)))
   )
 
 (defn -main [& args]
