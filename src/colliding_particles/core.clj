@@ -85,15 +85,17 @@
         dvnorm (norm dv)]
     (assoc p
            :vel (v+ (:vel p)
-                    (if (:cw p)
-                      [(- (dvnorm 1)) (dvnorm 0)]
-                      [(dvnorm 1) (- (dvnorm 0))])))))
+                    (v*
+                      (if (:cw p)
+                        [(- (dvnorm 1)) (dvnorm 0)]
+                        [(dvnorm 1) (- (dvnorm 0))])
+                      1.0)))))
 
 (defn update-accelerations [state]
   (assoc state
          :particles (map 
-                      tangent
-                      ;repel
+                      ;tangent
+                      repel
                       (:particles state))))
 
 (defn update-positions [state]
@@ -131,10 +133,16 @@
     (doseq [part (:dead-particles state)]
       (q/no-fill)
       (apply q/stroke (:col (:emitter part)))
-      (q/begin-shape)
-      (doseq [[x y] (:history part)]
-        (q/vertex x y))
-      (q/end-shape))
+      (when false 
+        (q/begin-shape)
+        (doseq [[x y] (:history part)]
+          (q/vertex x y))
+        (q/end-shape))
+      (when (and true (not (empty? (:history part))))
+        (q/ellipse ((first (:history part)) 0) ((first (:history part)) 1) 1 1))
+
+      )
+
 
     (when (and true (zero? (mod (:iterations state) 20)))
       (q/save "hairy.png"))
